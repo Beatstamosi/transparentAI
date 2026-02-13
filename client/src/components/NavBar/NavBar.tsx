@@ -1,11 +1,22 @@
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom"; // Added useNavigate
+import { supabase } from "../../lib/supabaseClient"; // Import your client
 import styles from "./NavBar.module.css";
 
 export default function NavBar() {
   const location = useLocation();
+  const navigate = useNavigate(); // Initialize navigate
 
-  // Helper to check if a link is active
   const isActive = (path: string) => location.pathname === path;
+
+  const handleLogout = async () => {
+    const { error } = await supabase.auth.signOut();
+
+    if (error) {
+      console.error("Error logging out:", error.message);
+    } else {
+      navigate("/");
+    }
+  };
 
   return (
     <nav className={styles.nav}>
@@ -28,10 +39,7 @@ export default function NavBar() {
           My Agent
         </Link>
 
-        <button
-          className={styles.logoutBtn}
-          onClick={() => console.log("Logout clicked")}
-        >
+        <button className={styles.logoutBtn} onClick={handleLogout}>
           Logout
         </button>
       </div>

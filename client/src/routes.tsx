@@ -2,6 +2,8 @@ import Home from "./components/Home/Home";
 import MyAgent from "./components/MyAgent/MyAgent";
 import ContextManager from "./components/ContextManager/ContextManager";
 import MainLayout from "./components/MainLayout";
+import ProtectedRoute from "./components/ProtectedRoute";
+import Auth from "./components/Auth/Auth";
 
 const routes = [
   {
@@ -9,15 +11,18 @@ const routes = [
     element: <Home />,
   },
   {
-    element: <MainLayout />,
+    path: "/auth",
+    element: <Auth />,
+  },
+  {
+    element: <ProtectedRoute />,
     children: [
       {
-        path: "my-agent",
-        element: <MyAgent />,
-      },
-      {
-        path: "my-context",
-        element: <ContextManager />,
+        element: <MainLayout />,
+        children: [
+          { path: "/my-context", element: <ContextManager /> },
+          { path: "/my-agent", element: <MyAgent /> },
+        ],
       },
     ],
   },
