@@ -1,11 +1,9 @@
 #root {
-  max-width: 1280px;
   margin: 0 auto;
   text-align: center;
 }
 
-.container {
-  max-width: 600px;
+.pageLayout {
   margin: 2rem auto;
   padding: 1rem;
   font-family: sans-serif;

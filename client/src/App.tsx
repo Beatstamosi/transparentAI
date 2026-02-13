@@ -54,7 +54,7 @@ function App() {
   };
 
   return (
-    <div className="container">
+    <div className="pagelayout">
       <h1>Teile das Problem, welches du mit deinem E-bike hast:</h1>
 
       <div className="input-area">
