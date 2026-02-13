@@ -1,4 +1,5 @@
 import styles from "./Home.module.css";
+import { Link } from "react-router-dom";
 
 export default function Home() {
   return (
@@ -7,12 +8,9 @@ export default function Home() {
       <header className={styles.header}>
         <div className={styles.logo}>transparentAI</div>
         <nav>
-          <button
-            className={styles.tryButton}
-            style={{ padding: "0.6rem 1.5rem", fontSize: "0.9rem" }}
-          >
+          <Link to="/my-agent" className={styles.tryButton}>
             Try out
-          </button>
+          </Link>
         </nav>
       </header>
 
@@ -28,7 +26,9 @@ export default function Home() {
           Experience a smarter world without sacrificing your digital
           sovereignty.
         </p>
-        <button className={styles.tryButton}>Get Started for Free</button>
+        <Link to="/my-agent" className={styles.tryButton}>
+          Get Started For Free
+        </Link>
       </section>
 
       {/* Process/Info Section */}
