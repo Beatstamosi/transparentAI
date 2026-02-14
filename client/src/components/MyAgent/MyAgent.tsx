@@ -1,65 +1,197 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+import { supabase } from "../../lib/supabaseClient";
 import styles from "./MyAgent.module.css";
+import ReactMarkdown from "react-markdown";
+
+interface ContextItem {
+  id: string;
+  file_name: string;
+  source_type: "audio" | "pdf";
+  public_url: string;
+}
 
 export default function MyAgent() {
-  const [question, setQuestion] = useState("");
-  const [answer, setAnswer] = useState("");
+  const [input, setInput] = useState("");
+  const [messages, setMessages] = useState<
+    { role: "user" | "ai"; text: string }[]
+  >([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [availableContext, setAvailableContext] = useState<ContextItem[]>([]);
 
-  const handleAsk = () => {
-    if (!question.trim()) return;
+  // Responsive State
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-    // Logic for calling Groq/Express will go here
+  // Auto-scroll reference
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, isLoading]);
+
+  // Fetch context items
+  useEffect(() => {
+    const fetchContext = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const response = await fetch("http://localhost:3000/context", {
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setAvailableContext(data);
+      }
+    };
+    fetchContext();
+  }, []);
+
+  const sendMessage = async () => {
+    if (!input.trim()) return;
+    const userMsg = input;
+    setMessages((prev) => [...prev, { role: "user", text: userMsg }]);
+    setInput("");
     setIsLoading(true);
-    console.log("Asking agent:", question);
 
-    // Simulating a response for UI demonstration
-    setTimeout(() => {
-      setAnswer(
-        "This is a preview of how your personal agent will respond using your specific context. Once we connect the backend, the LLM will analyze your PDFs and audio to provide transparent answers here.",
-      );
+    // Close sidebar on mobile when sending a message to focus on chat
+    setIsSidebarOpen(false);
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const response = await fetch("http://localhost:3000/chat/query", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ message: userMsg }),
+      });
+      const data = await response.json();
+      setMessages((prev) => [...prev, { role: "ai", text: data.reply }]);
+    } catch (error) {
+      setMessages((prev) => [
+        ...prev,
+        { role: "ai", text: "Sorry, I ran into an error." },
+      ]);
+      console.log(error);
+    } finally {
       setIsLoading(false);
-    }, 1500);
+    }
+  };
+
+  const clearChat = () => {
+    if (window.confirm("Clear conversation?")) setMessages([]);
   };
 
   return (
-    <div className={styles.container}>
-      <h1 style={{ marginBottom: "2rem" }}>My Personal Agent</h1>
+    <div className={styles.pageWrapper}>
+      {/* Sidebar Overlay for Mobile */}
+      {isSidebarOpen && (
+        <div
+          className={styles.overlay}
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
 
-      <div className={styles.chatWrapper}>
-        <div className={styles.inputSection}>
-          <textarea
-            className={styles.textArea}
-            placeholder="Ask anything based on your uploaded context..."
-            value={question}
-            onChange={(e) => setQuestion(e.target.value)}
-          />
+      {/* Sidebar */}
+      <aside
+        className={`${styles.sidebar} ${isSidebarOpen ? styles.sidebarOpen : ""}`}
+      >
+        <div className={styles.sidebarHeader}>
+          <h3>Agent Knowledge</h3>
           <button
-            className={styles.sendButton}
-            onClick={handleAsk}
-            disabled={isLoading || !question.trim()}
+            className={styles.mobileOnly}
+            onClick={() => setIsSidebarOpen(false)}
           >
-            {isLoading ? "Thinking..." : "Ask Agent ➜"}
+            ✕
           </button>
         </div>
+        <button className={styles.clearBtn} onClick={clearChat}>
+          Clear Chat
+        </button>
+        <p className={styles.sidebarSubtitle}>Files being used for context:</p>
 
-        <div className={styles.divider} />
-
-        <div className={styles.responseSection}>
-          <div className={styles.responseHeader}>
-            <span>✦</span> Agent Response
-          </div>
-
-          {answer ? (
-            <div className={styles.answerBox}>{answer}</div>
-          ) : (
-            <div className={styles.placeholderText}>
-              Your agent is waiting for a question. It will only use the context
-              you've provided.
+        <div className={styles.sourceList}>
+          {availableContext.map((item) => (
+            <div key={item.id} className={styles.sourceItem}>
+              <span>{item.source_type === "audio" ? "🎤" : "📄"}</span>
+              <span className={styles.sourceName}>{item.file_name}</span>
             </div>
+          ))}
+          {availableContext.length === 0 && (
+            <p className={styles.empty}>No files yet.</p>
           )}
         </div>
-      </div>
+      </aside>
+
+      {/* Main Chat Area */}
+      <main className={styles.chatContainer}>
+        {/* Mobile Header Toggle */}
+        <div className={styles.mobileHeader}>
+          <button
+            onClick={() => setIsSidebarOpen(true)}
+            className={styles.menuBtn}
+          >
+            ☰ View Sources
+          </button>
+          <span className={styles.mobileTitle}>AI Agent</span>
+        </div>
+
+        <div className={styles.messagesList}>
+          {messages.length === 0 && (
+            <div className={styles.welcome}>
+              <h2>Knowledge Assistant</h2>
+              <p>Ask me anything about your uploaded files.</p>
+            </div>
+          )}
+
+          {messages.map((msg, idx) => (
+            <div
+              key={idx}
+              className={msg.role === "user" ? styles.userRow : styles.aiRow}
+            >
+              <div
+                className={
+                  msg.role === "user" ? styles.userBubble : styles.aiBubble
+                }
+              >
+                <ReactMarkdown>{msg.text}</ReactMarkdown>
+              </div>
+            </div>
+          ))}
+
+          {isLoading && (
+            <div className={styles.aiRow}>
+              <div className={styles.aiBubble}>
+                <span className={styles.typing}>Thinking...</span>
+              </div>
+            </div>
+          )}
+          {/* Scroll Target */}
+          <div ref={messagesEndRef} />
+        </div>
+
+        <div className={styles.inputArea}>
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Type a message..."
+            onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+          />
+          <button
+            onClick={sendMessage}
+            disabled={isLoading}
+            className={styles.sendBtn}
+          >
+            {isLoading ? "..." : "Send"}
+          </button>
+        </div>
+      </main>
     </div>
   );
 }

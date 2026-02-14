@@ -3,7 +3,7 @@
   background: radial-gradient(circle at bottom left, #1e293b, #0f172a);
   color: #f8fafc;
   padding: 2rem 5%;
-  font-family: 'Inter', sans-serif;
+  font-family: "Inter", sans-serif;
 }
 
 .topBar {
@@ -32,7 +32,10 @@
   transition: all 0.2s;
 }
 
-.btnPrimary:hover { background: #2563eb; transform: translateY(-1px); }
+.btnPrimary:hover {
+  background: #2563eb;
+  transform: translateY(-1px);
+}
 
 .btnDanger {
   background: rgba(239, 68, 68, 0.1);
@@ -44,7 +47,9 @@
   transition: all 0.2s;
 }
 
-.btnDanger:hover { background: rgba(239, 68, 68, 0.2); }
+.btnDanger:hover {
+  background: rgba(239, 68, 68, 0.2);
+}
 
 .managerCard {
   background: rgba(255, 255, 255, 0.03);
@@ -76,7 +81,7 @@
 }
 
 .activeTab::after {
-  content: '';
+  content: "";
   position: absolute;
   bottom: -1px;
   left: 0;
@@ -101,8 +106,15 @@
   border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-.itemInfo h4 { margin: 0; font-size: 1rem; color: #f1f5f9; }
-.itemInfo span { font-size: 0.85rem; color: #64748b; }
+.itemInfo h4 {
+  margin: 0;
+  font-size: 1rem;
+  color: #f1f5f9;
+}
+.itemInfo span {
+  font-size: 0.85rem;
+  color: #64748b;
+}
 
 .itemActions {
   display: flex;
@@ -119,5 +131,177 @@
   transition: all 0.2s;
 }
 
-.iconBtn:hover { background: rgba(255, 255, 255, 0.1); color: white; }
-.deleteBtn:hover { color: #ef4444; background: rgba(239, 68, 68, 0.1); }
+.modalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  backdrop-filter: blur(4px);
+}
+
+.modal {
+  background: #1e293b;
+  padding: 2rem;
+  border-radius: 20px;
+  width: 90%;
+  max-width: 400px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+}
+
+.modal h3 {
+  margin-bottom: 0.5rem;
+  color: white;
+}
+.modal p {
+  color: #94a3b8;
+  font-size: 0.9rem;
+  margin-bottom: 1.5rem;
+}
+
+.modalInput {
+  width: 100%;
+  padding: 0.8rem;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  color: white;
+  margin-bottom: 1.5rem;
+  outline: none;
+}
+
+.modalInput:focus {
+  border-color: #3b82f6;
+}
+
+.modalActions {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+}
+
+.btnSecondary {
+  background: transparent;
+  color: white;
+  border: 1px solid #334155;
+  padding: 0.6rem 1.2rem;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.iconBtn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+.deleteBtn:hover {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.progressContainer {
+  margin: 1rem 0;
+  padding: 1rem;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.progressLabel {
+  font-size: 0.875rem;
+  color: #475569;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+}
+
+.progressBarBg {
+  width: 100%;
+  height: 8px;
+  background: #e2e8f0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progressBarFill {
+  height: 100%;
+  background: #3b82f6; /* A nice primary blue */
+  transition: width 0.3s ease; /* Makes the bar move smoothly */
+}
+
+@media (max-width: 768px) {
+  .progressContainer {
+    margin: 0.5rem;
+  }
+  .progressBarBg {
+    height: 12px; /* Thicker for better visibility on mobile */
+  }
+}
+
+/* Mobile Overrides */
+@media (max-width: 768px) {
+  .container {
+    padding: 10px;
+  }
+
+  .topBar {
+    flex-direction: column; /* Stack Title and Buttons */
+    align-items: flex-start;
+    gap: 1.5rem;
+  }
+
+  .actionGroup {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr; /* Buttons take full width */
+    gap: 10px;
+  }
+
+  .btnPrimary,
+  .btnDanger {
+    width: 100%;
+    justify-content: center;
+    padding: 12px; /* Larger touch target for thumbs */
+  }
+
+  .tabs {
+    display: flex;
+    overflow-x: auto; /* Allow swiping through tabs if you add more later */
+  }
+
+  .item {
+    flex-direction: column; /* Stack file info and actions */
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 1rem;
+  }
+
+  .itemActions {
+    width: 100%;
+    justify-content: space-between; /* Put icons on opposite sides */
+    border-top: 1px solid #e2e8f0;
+    padding-top: 0.75rem;
+  }
+
+  .modal {
+    width: 95%; /* Modal takes up more screen real estate on mobile */
+    padding: 1.5rem;
+  }
+}
+
+.mobileOnly {
+  display: none;
+}
+
+@media (max-width: 480px) {
+  .mobileOnly {
+    display: inline;
+  }
+  .desktopOnly {
+    display: none;
+  }
+}
