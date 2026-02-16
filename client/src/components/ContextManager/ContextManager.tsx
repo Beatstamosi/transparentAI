@@ -9,7 +9,7 @@ interface ContextItem {
   source_type: "audio" | "pdf";
   public_url: string;
   created_at: string;
-  content?: string; // Optional since we don't always fetch it
+  content?: string;
 }
 
 interface WhisperOutput {
@@ -20,15 +20,27 @@ interface WhisperOutput {
   }>;
 }
 
-// If you need to type the transcriber function itself
+interface ExtendedWindow extends Window {
+  webkitAudioContext?: typeof AudioContext;
+}
+
+interface ProgressData {
+  status: "initiate" | "progress" | "done" | "ready";
+  name?: string;
+  file?: string;
+  progress?: number;
+}
+
 type TranscriberPipeline = (
   data: Float32Array,
+  options?: { language?: string; task?: string },
 ) => Promise<WhisperOutput | string>;
 
 export default function ContextManager() {
   const [activeTab, setActiveTab] = useState("audio");
   const [isUploading, setIsUploading] = useState(false);
   const [transcriptionStatus, setTranscriptionStatus] = useState("");
+  const [downloadProgress, setDownloadProgress] = useState<number>(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(
@@ -43,7 +55,7 @@ export default function ContextManager() {
     const {
       data: { session },
     } = await supabase.auth.getSession();
-    const response = await fetch("http://localhost:3000/context", {
+    const response = await fetch(`${import.meta.env.VITE_API_URL}/context`, {
       headers: { Authorization: `Bearer ${session?.access_token}` },
     });
     if (response.ok) {
@@ -56,16 +68,15 @@ export default function ContextManager() {
     fetchContexts();
   }, []);
 
-  // Filter context based on the active tab
   const filteredItems = contexts.filter((item) => {
     if (activeTab === "audio") return item.source_type === "audio";
     if (activeTab === "files") return item.source_type === "pdf";
     return false;
   });
 
-  // --- LOCAL TRANSCRIPTION LOGIC ---
   const transcribeLocally = async (blob: Blob): Promise<string> => {
     setTranscriptionStatus("Initializing AI...");
+    setDownloadProgress(0);
 
     env.allowLocalModels = false;
     env.useBrowserCache = true;
@@ -73,37 +84,51 @@ export default function ContextManager() {
     env.remotePathTemplate = "{model}/resolve/{revision}/";
 
     try {
-      // Cast the pipeline to our specific type
       const transcriber = (await pipeline(
         "automatic-speech-recognition",
-        "Xenova/whisper-tiny.en",
+        "Xenova/whisper-tiny", // Multilingual version
+        {
+          progress_callback: (data: ProgressData) => {
+            if (
+              data.status === "progress" &&
+              typeof data.progress === "number"
+            ) {
+              setDownloadProgress(Math.round(data.progress));
+            }
+            if (data.status === "ready") {
+              setDownloadProgress(100);
+              setTranscriptionStatus("Model Loaded. Processing audio...");
+            }
+          },
+        },
       )) as unknown as TranscriberPipeline;
 
-      setTranscriptionStatus("Processing audio...");
-
-      // Use standard AudioContext with options
       const AudioContextClass =
-        window.AudioContext ||
-        (window as typeof window & { webkitAudioContext: typeof AudioContext })
-          .webkitAudioContext;
+        window.AudioContext || (window as ExtendedWindow).webkitAudioContext;
+
+      if (!AudioContextClass) {
+        throw new Error("Web Audio API is not supported in this browser.");
+      }
+
       const audioContext = new AudioContextClass({ sampleRate: 16000 });
 
       const arrayBuffer = await blob.arrayBuffer();
       const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
       const audioData = audioBuffer.getChannelData(0);
 
-      const output = await transcriber(audioData);
+      const output = await transcriber(audioData, {
+        language: "german", // Forced German as requested
+        task: "transcribe",
+      });
 
+      await audioContext.close();
+      setDownloadProgress(0);
       setTranscriptionStatus("");
 
-      // Use type-safe check instead of any
-      if (typeof output === "string") {
-        return output;
-      } else {
-        return output.text;
-      }
+      return typeof output === "string" ? output : output.text;
     } catch (err) {
-      console.error("Transcription detailed error:", err);
+      console.error("Transcription error:", err);
+      setDownloadProgress(0);
       setTranscriptionStatus("Error in transcription.");
       throw err;
     }
@@ -112,10 +137,7 @@ export default function ContextManager() {
   const uploadAudio = async (blob: Blob, fileName: string) => {
     setIsUploading(true);
     try {
-      // 1. Transcribe locally first
       const transcription = await transcribeLocally(blob);
-
-      // 2. Prepare FormData with BOTH the file and the text
       const formData = new FormData();
       formData.append("file", blob, `${fileName}.webm`);
       formData.append("transcription", transcription);
@@ -124,10 +146,8 @@ export default function ContextManager() {
       const {
         data: { session },
       } = await supabase.auth.getSession();
-
-      // 3. Send to a new hybrid endpoint
       const response = await fetch(
-        "http://localhost:3000/context/audio-hybrid",
+        `${import.meta.env.VITE_API_URL}/context/audio-hybrid`,
         {
           method: "POST",
           headers: { Authorization: `Bearer ${session?.access_token}` },
@@ -136,7 +156,6 @@ export default function ContextManager() {
       );
 
       if (response.ok) {
-        alert("Success!");
         fetchContexts();
       }
     } catch (error) {
@@ -174,8 +193,6 @@ export default function ContextManager() {
     }
   };
 
-  const triggerFileSelect = () => fileInputRef.current?.click();
-
   const handleFileUpload = async (
     event: React.ChangeEvent<HTMLInputElement>,
   ) => {
@@ -188,15 +205,15 @@ export default function ContextManager() {
       } = await supabase.auth.getSession();
       const formData = new FormData();
       formData.append("file", file);
-      const response = await fetch("http://localhost:3000/context/pdf", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${session?.access_token}` },
-        body: formData,
-      });
-      if (response.ok) {
-        alert("Success!");
-        fetchContexts();
-      }
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL}/context/pdf`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${session?.access_token}` },
+          body: formData,
+        },
+      );
+      if (response.ok) fetchContexts();
     } catch (error) {
       alert(`Upload failed: ${error}`);
     } finally {
@@ -206,58 +223,35 @@ export default function ContextManager() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm("Are you sure you want to delete this context?"))
-      return;
-
-    try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      const response = await fetch(`http://localhost:3000/context/${id}`, {
+    if (!window.confirm("Delete this item?")) return;
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const response = await fetch(
+      `${import.meta.env.VITE_API_URL}/context/${id}`,
+      {
         method: "DELETE",
         headers: { Authorization: `Bearer ${session?.access_token}` },
-      });
-
-      if (response.ok) {
-        // Remove the item from the local state list
-        setContexts((prev) => prev.filter((item) => item.id !== id));
-      } else {
-        alert("Failed to delete context.");
-      }
-    } catch (error) {
-      console.error("Delete error:", error);
-    }
+      },
+    );
+    if (response.ok) setContexts((prev) => prev.filter((i) => i.id !== id));
   };
 
   const handleDeleteAll = async () => {
-    const confirmed = window.confirm(
-      "ARE YOU SURE? This will permanently delete ALL your uploaded PDFs and audio recordings. This cannot be undone.",
-    );
-
-    if (!confirmed) return;
-
-    setIsUploading(true); // Re-use loading state to disable buttons
+    if (!window.confirm("Delete ALL context? This cannot be undone.")) return;
+    setIsUploading(true);
     try {
       const {
         data: { session },
       } = await supabase.auth.getSession();
-
-      const response = await fetch("http://localhost:3000/context/all", {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${session?.access_token}` },
-      });
-
-      if (response.ok) {
-        setContexts([]); // Clear local state immediately
-        alert("All context has been cleared.");
-      } else {
-        const errorData = await response.json();
-        alert(`Error: ${errorData.error}`);
-      }
-    } catch (err) {
-      console.error("Delete all error:", err);
-      alert("Failed to wipe context.");
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL}/context/all`,
+        {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${session?.access_token}` },
+        },
+      );
+      if (response.ok) setContexts([]);
     } finally {
       setIsUploading(false);
     }
@@ -274,15 +268,15 @@ export default function ContextManager() {
             disabled={isUploading}
           >
             <span>{isRecording ? "⏹️" : "🎤"}</span>
-            {isRecording ? "Stop Recording" : "Record Audio"}
+            {isRecording ? "Stop" : "Record"}
           </button>
 
           <button
             className={styles.btnPrimary}
-            onClick={triggerFileSelect}
+            onClick={() => fileInputRef.current?.click()}
             disabled={isUploading}
           >
-            <span>📁</span> {isUploading ? "Processing..." : "Upload PDF"}
+            <span>📁</span> {isUploading ? "Uploading..." : "PDF"}
           </button>
 
           <input
@@ -292,15 +286,33 @@ export default function ContextManager() {
             accept=".pdf"
             style={{ display: "none" }}
           />
-          <button className={styles.btnDanger} onClick={handleDeleteAll}>
-            Delete All Context
+          <button
+            className={styles.btnDanger}
+            onClick={handleDeleteAll}
+            disabled={isUploading}
+          >
+            Wipe All
           </button>
         </div>
       </div>
 
-      {/* Loading Status Indicator */}
-      {transcriptionStatus && (
-        <div className={styles.statusMessage}>{transcriptionStatus}</div>
+      {(transcriptionStatus || downloadProgress > 0) && (
+        <div className={styles.statusContainer}>
+          <div className={styles.statusMessage}>
+            {transcriptionStatus}{" "}
+            {downloadProgress > 0 && downloadProgress < 100
+              ? `${downloadProgress}%`
+              : ""}
+          </div>
+          {downloadProgress > 0 && (
+            <div className={styles.progressBarBg}>
+              <div
+                className={styles.progressBarFill}
+                style={{ width: `${downloadProgress}%` }}
+              />
+            </div>
+          )}
+        </div>
       )}
 
       <div className={styles.managerCard}>
@@ -309,7 +321,6 @@ export default function ContextManager() {
             className={`${styles.tab} ${activeTab === "audio" ? styles.activeTab : ""}`}
             onClick={() => setActiveTab("audio")}
           >
-            {/* Shorten text for small screens */}
             <span className={styles.desktopOnly}>Audio Recordings</span>
             <span className={styles.mobileOnly}>Audio</span>
           </button>
@@ -329,7 +340,6 @@ export default function ContextManager() {
                 <span>{new Date(item.created_at).toLocaleDateString()}</span>
               </div>
               <div className={styles.itemActions}>
-                {/* Open PDF or Play Audio in new tab */}
                 <a
                   href={item.public_url}
                   target="_blank"
@@ -347,13 +357,8 @@ export default function ContextManager() {
               </div>
             </div>
           ))}
-
           {filteredItems.length === 0 && (
-            <p
-              style={{ textAlign: "center", color: "#64748b", padding: "2rem" }}
-            >
-              No {activeTab} found.
-            </p>
+            <p className={styles.emptyLabel}>No {activeTab} found.</p>
           )}
         </div>
       </div>
@@ -362,7 +367,6 @@ export default function ContextManager() {
         <div className={styles.modalOverlay}>
           <div className={styles.modal}>
             <h3>Save Recording</h3>
-            <p>Your audio will be transcribed 100% locally on your device.</p>
             <input
               type="text"
               className={styles.modalInput}
