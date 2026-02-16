@@ -38,7 +38,7 @@ export default function MyAgent() {
       const {
         data: { session },
       } = await supabase.auth.getSession();
-      const response = await fetch("http://localhost:3000/context", {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/context`, {
         headers: { Authorization: `Bearer ${session?.access_token}` },
       });
       if (response.ok) {
@@ -63,14 +63,17 @@ export default function MyAgent() {
       const {
         data: { session },
       } = await supabase.auth.getSession();
-      const response = await fetch("http://localhost:3000/chat/query", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session?.access_token}`,
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL}/chat/query`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session?.access_token}`,
+          },
+          body: JSON.stringify({ message: userMsg }),
         },
-        body: JSON.stringify({ message: userMsg }),
-      });
+      );
       const data = await response.json();
       setMessages((prev) => [...prev, { role: "ai", text: data.reply }]);
     } catch (error) {
